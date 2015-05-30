@@ -16,22 +16,16 @@
 #include<GL/glut.h>
 #include"GifEncoder.h"
 
-#define WINDOW_WIDTH 256
-#define WINDOW_HEIGHT 256
-#define ID_EDITSHOW 1000
+#define PREVIEW_WIDTH 512
+#define PREVIEW_HEIGHT 384
 #define ID_SELECTALL 1001
 #define WM_CREATED WM_APP
-#define WM_SETALPHA (WM_APP+1)
-#define ANIMATION_STEP 32
-#define SHOWEDITALPHA 128
-#define HIDEDITALPHA 64
 
 HDC hDC;
 BOOL active;
 GLuint program;
 GLuint vao;
 GLuint vbo;
-WNDPROC EditWndProc;
 const TCHAR szClassName[] = TEXT("Window");
 const GLfloat position[][2] = { { -1.f, -1.f }, { 1.f, -1.f }, { 1.f, 1.f }, { -1.f, 1.f } };
 const int vertices = sizeof position / sizeof position[0];
@@ -163,15 +157,15 @@ inline VOID DrawGLScene(HDC hdc, GLfloat time)
 	bitmapInfo.bmiHeader.biPlanes = 1;
 	bitmapInfo.bmiHeader.biBitCount = 32;
 	bitmapInfo.bmiHeader.biCompression = BI_RGB;
-	bitmapInfo.bmiHeader.biWidth = WINDOW_WIDTH;
-	bitmapInfo.bmiHeader.biHeight = WINDOW_HEIGHT;
-	bitmapInfo.bmiHeader.biSizeImage = WINDOW_WIDTH * WINDOW_HEIGHT * 4; // Size 4, assuming RGBA from OpenGL
+	bitmapInfo.bmiHeader.biWidth = PREVIEW_WIDTH;
+	bitmapInfo.bmiHeader.biHeight = PREVIEW_HEIGHT;
+	bitmapInfo.bmiHeader.biSizeImage = PREVIEW_WIDTH * PREVIEW_HEIGHT * 4;
 	void *bmBits = 0;
 	HDC memDC = CreateCompatibleDC(hdc);
 	HBITMAP memBM = CreateDIBSection(0, &bitmapInfo, DIB_RGB_COLORS, &bmBits, 0, 0);
-	glReadPixels(0, 0, WINDOW_WIDTH, WINDOW_HEIGHT, GL_BGRA_EXT, GL_UNSIGNED_BYTE, bmBits);
+	glReadPixels(0, 0, PREVIEW_WIDTH, PREVIEW_HEIGHT, GL_BGRA_EXT, GL_UNSIGNED_BYTE, bmBits);
 	HGDIOBJ prevBitmap = SelectObject(memDC, memBM);
-	BitBlt(hdc, 0, 0, WINDOW_WIDTH, WINDOW_HEIGHT, memDC, 0, 0, SRCCOPY);
+	BitBlt(hdc, 0, 0, PREVIEW_WIDTH, PREVIEW_HEIGHT, memDC, 0, 0, SRCCOPY);
 	SelectObject(memDC, prevBitmap);
 	DeleteObject(memBM);
 	DeleteDC(memDC);
@@ -180,10 +174,10 @@ inline VOID DrawGLScene(HDC hdc, GLfloat time)
 inline void CreateAnimationGif(LPCTSTR lpszFilePath, int nTime, int nFrameRate)
 {
 	CGifEncoder gifEncoder;
-	gifEncoder.SetFrameSize(WINDOW_WIDTH, WINDOW_HEIGHT);
+	gifEncoder.SetFrameSize(PREVIEW_WIDTH, PREVIEW_HEIGHT);
 	gifEncoder.SetFrameRate(nFrameRate);
 	gifEncoder.StartEncoder(std::wstring(lpszFilePath));
-	Gdiplus::Bitmap *bmp = new Gdiplus::Bitmap(WINDOW_WIDTH, WINDOW_HEIGHT);
+	Gdiplus::Bitmap *bmp = new Gdiplus::Bitmap(PREVIEW_WIDTH, PREVIEW_HEIGHT);
 	for (int time = 0; time < nTime; time++)
 	{
 		Gdiplus::Graphics g(bmp);
@@ -201,67 +195,15 @@ inline double easeOutExpo(double t, double b, double c, double d)
 	return (t == d) ? b + c : c * (-pow(2, -10 * t / d) + 1) + b;
 }
 
-LRESULT CALLBACK EditProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
-{
-	static BOOL bHover;
-	static BYTE dwAlphaEnd;
-	static BYTE dwAlphaStart;
-	static BYTE dwAlphaStep;
-	switch (msg)
-	{
-	case WM_SYSCOMMAND:
-		if ((wParam & 0xFFF0) == SC_CLOSE) return SendMessage(GetParent(hWnd), WM_SYSCOMMAND, wParam, lParam);
-		break;
-	case WM_MOUSEMOVE:
-		if (!bHover)
-		{
-			if (hWnd != GetFocus())	SetFocus(hWnd);
-			bHover = TRUE;
-			TRACKMOUSEEVENT tme = { sizeof(tme), TME_LEAVE, hWnd, 0 };
-			TrackMouseEvent(&tme);
-			InvalidateRect(hWnd, 0, TRUE);
-			PostMessage(hWnd, WM_SETALPHA, SHOWEDITALPHA, 0);
-		}
-		break;
-	case WM_MOUSELEAVE:
-		bHover = FALSE;
-		PostMessage(hWnd, WM_SETALPHA, HIDEDITALPHA, 0);
-		break;
-	case WM_SETALPHA:
-		KillTimer(hWnd, 0x1234);
-		GetLayeredWindowAttributes(hWnd, 0, &dwAlphaStart, 0);
-		dwAlphaEnd = wParam;
-		dwAlphaStep = 0;
-		SetTimer(hWnd, 0x1234, 1, 0);
-		return 0;
-	case WM_TIMER:
-		if (dwAlphaStep > ANIMATION_STEP || dwAlphaStart == dwAlphaEnd)
-		{
-			KillTimer(hWnd, 0x1234);
-			SetLayeredWindowAttributes(hWnd, 0, dwAlphaEnd, LWA_ALPHA);
-		}
-		else
-		{
-			dwAlphaStep++;
-			const BYTE bByte = (dwAlphaStart < dwAlphaEnd) ? easeOutExpo(dwAlphaStep, dwAlphaStart, dwAlphaEnd - dwAlphaStart, ANIMATION_STEP) :
-				dwAlphaStart + dwAlphaEnd - easeOutExpo(dwAlphaStep, dwAlphaEnd, dwAlphaStart - dwAlphaEnd, ANIMATION_STEP);
-			SetLayeredWindowAttributes(hWnd, 0, bByte, LWA_ALPHA);
-		}
-		break;
-	case WM_DESTROY:
-		KillTimer(hWnd, 0x1234);
-		break;
-	}
-	return CallWindowProc(EditWndProc, hWnd, msg, wParam, lParam);
-}
-
 LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 {
 	static PIXELFORMATDESCRIPTOR pfd = { sizeof(PIXELFORMATDESCRIPTOR), 1,
 		PFD_DRAW_TO_WINDOW | PFD_SUPPORT_OPENGL | PFD_DOUBLEBUFFER, PFD_TYPE_RGBA,
 		32, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 16, 0, 0, PFD_MAIN_PLANE, 0, 0, 0, 0 };
 	static GLuint PixelFormat;
+	static HWND hStatic;
 	static HWND hEdit;
+	static HWND hButton;
 	static HFONT hFont;
 	static HINSTANCE hRtLib;
 	static BOOL bEditVisible = TRUE;
@@ -271,14 +213,17 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 	case WM_CREATE:
 		hRtLib = LoadLibrary(TEXT("RICHED32"));
 		hFont = CreateFont(24, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, TEXT("Consolas"));
-		hEdit = CreateWindowEx(WS_EX_LAYERED, RICHEDIT_CLASS, 0, WS_VISIBLE | WS_POPUP | WS_HSCROLL |
+		hStatic = CreateWindow(TEXT("STATIC"), 0, WS_VISIBLE | WS_CHILD | SS_SIMPLE,
+			10, 10, PREVIEW_WIDTH, PREVIEW_HEIGHT, hWnd, 0, ((LPCREATESTRUCT)lParam)->hInstance, 0);
+		hEdit = CreateWindowEx(WS_EX_CLIENTEDGE, RICHEDIT_CLASS, 0, WS_VISIBLE | WS_CHILD | WS_HSCROLL |
 			WS_VSCROLL | ES_MULTILINE | ES_AUTOVSCROLL | ES_AUTOHSCROLL | ES_NOHIDESEL,
 			0, 0, 0, 0, hWnd, 0, ((LPCREATESTRUCT)lParam)->hInstance, 0);
+		hButton = CreateWindow(TEXT("BUTTON"), TEXT("GIF出力..."), WS_VISIBLE | WS_CHILD,
+			PREVIEW_WIDTH / 2 - 54, PREVIEW_HEIGHT + 20, 128, 32, hWnd, (HMENU)100, ((LPCREATESTRUCT)lParam)->hInstance, 0);
 		SendMessage(hEdit, EM_SETTEXTMODE, TM_PLAINTEXT, 0);
 		SendMessage(hEdit, EM_LIMITTEXT, -1, 0);
-		EditWndProc = (WNDPROC)SetWindowLong(hEdit, GWL_WNDPROC, (LONG)EditProc);
 		SendMessage(hEdit, WM_SETFONT, (WPARAM)hFont, 0);
-		if (!(hDC = GetDC(hWnd)) ||
+		if (!(hDC = GetDC(hStatic)) ||
 			!(PixelFormat = ChoosePixelFormat(hDC, &pfd)) ||
 			!SetPixelFormat(hDC, PixelFormat, &pfd) ||
 			!(hRC = wglCreateContext(hDC)) ||
@@ -295,10 +240,10 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 			TEXT("	for (float i = 0.0; i < 5.0; i++)\r\n")
 			TEXT("	{\r\n")
 			TEXT("		vec2 b = vec2(\r\n")
-			TEXT("		sin(time + i * pi / 7) * 256 + 512,\r\n")
-			TEXT("		cos(time + i * pi / 2) * 256 + 384\r\n")
+			TEXT("		sin(time + i * pi / 7) * 128 + 256,\r\n")
+			TEXT("		cos(time + i * pi / 2) * 128 + 192\r\n")
 			TEXT("		);\r\n")
-			TEXT("		c += 32 / distance(p, b);\r\n")
+			TEXT("		c += 16 / distance(p, b);\r\n")
 			TEXT("	}\r\n")
 			TEXT("	gl_FragColor = vec4(c*c / sin(time), c*c / 2, c*c, 1.0);\r\n")
 			TEXT("}\r\n")
@@ -309,16 +254,9 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 		SendMessage(hWnd, WM_COMMAND, MAKEWPARAM(0, EN_CHANGE), (long)hEdit);
 		SendMessage(hEdit, EM_SETEVENTMASK, 0, (LPARAM)(SendMessage(hEdit, EM_GETEVENTMASK, 0, 0) | ENM_CHANGE));
 		SetFocus(hEdit);
-		PostMessage(hEdit, WM_SETALPHA, SHOWEDITALPHA, 0);
 		break;
-	case WM_MOVE:
-	{
-					RECT rect;
-					GetClientRect(hWnd, &rect);
-					ClientToScreen(hWnd, (LPPOINT)&rect.left);
-					ClientToScreen(hWnd, (LPPOINT)&rect.right);
-					MoveWindow(hEdit, rect.left + 16, rect.top + 16, rect.right - rect.left - 32, rect.bottom - rect.top - 32, 1);
-	}
+	case WM_SIZE:
+		MoveWindow(hEdit, PREVIEW_WIDTH + 20, 10, LOWORD(lParam) - PREVIEW_WIDTH - 30, HIWORD(lParam) - 20, 1);
 		break;
 	case WM_COMMAND:
 		switch (LOWORD(wParam))
@@ -345,9 +283,6 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 				GlobalFree(lpszText);
 			}
 			break;
-		case ID_EDITSHOW:
-			ShowWindow(hEdit, IsWindowVisible(hEdit) ? SW_HIDE : SW_NORMAL);
-			break;
 		case ID_SELECTALL:
 			if (IsWindowVisible(hEdit))
 			{
@@ -355,14 +290,29 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 				SetFocus(hEdit);
 			}
 			break;
+		case 100:
+			{
+				TCHAR szFileName[MAX_PATH] = {0};
+				OPENFILENAME ofn;
+				ZeroMemory(&ofn, sizeof(ofn));
+				ofn.lStructSize = sizeof(OPENFILENAME);
+				ofn.hwndOwner = hWnd;
+				ofn.lpstrFilter = TEXT("GIF(*.gif)\0*.gif\0すべてのファイル(*.*)\0*.*\0\0");
+				ofn.lpstrFile = szFileName;
+				ofn.nMaxFile = sizeof(szFileName);
+				ofn.Flags = OFN_FILEMUSTEXIST | OFN_OVERWRITEPROMPT;
+				if (GetSaveFileName(&ofn))
+				{
+					CreateAnimationGif(szFileName, 50, 100);
+					MessageBox(
+						hWnd,
+						TEXT("完了しました。"),
+						TEXT("確認"),
+						MB_ICONINFORMATION);
+				}
+			}
+			break;
 		}
-		break;
-	case WM_LBUTTONDOWN:
-		CreateAnimationGif(TEXT("anim.gif"), 500, 100);
-		break;
-	case WM_RBUTTONDOWN:
-	//case WM_LBUTTONDOWN:
-		SendMessage(hWnd, WM_COMMAND, ID_EDITSHOW, 0);
 		break;
 	case WM_ACTIVATE:
 		active = !HIWORD(wParam);
@@ -377,7 +327,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 			wglMakeCurrent(0, 0);
 			wglDeleteContext(hRC);
 		}
-		if (hDC) ReleaseDC(hWnd, hDC);
+		if (hDC) ReleaseDC(hStatic, hDC);
 		FreeLibrary(hRtLib);
 		PostQuitMessage(0);
 		break;
@@ -400,15 +350,12 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPreInst, LPSTR pCmdLine, int 
 	Gdiplus::GdiplusStartupInput gdiSI;
 	Gdiplus::GdiplusStartup(&gdiToken, &gdiSI, NULL);
 	MSG msg;
-	const WNDCLASS wndclass = { 0, WndProc, 0, 0, hInstance, 0, LoadCursor(0, IDC_ARROW), 0, 0, szClassName };
+	const WNDCLASS wndclass = { 0, WndProc, 0, 0, hInstance, 0, LoadCursor(0, IDC_ARROW), (HBRUSH)(COLOR_WINDOW + 1), 0, szClassName };
 	RegisterClass(&wndclass);
-	RECT rect = { 0, 0, WINDOW_WIDTH, WINDOW_HEIGHT };
-	const DWORD dwStyle = WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX;
-	AdjustWindowRect(&rect, dwStyle, 0);
-	const HWND hWnd = CreateWindow(szClassName, 0, dwStyle, CW_USEDEFAULT, 0, rect.right - rect.left, rect.bottom - rect.top, 0, 0, hInstance, 0);
+	const HWND hWnd = CreateWindow(szClassName, 0, WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN, CW_USEDEFAULT, 0, CW_USEDEFAULT, 0, 0, 0, hInstance, 0);
 	ShowWindow(hWnd, SW_SHOWDEFAULT);
 	UpdateWindow(hWnd);
-	ACCEL Accel[] = { { FVIRTKEY, VK_ESCAPE, ID_EDITSHOW }, { FVIRTKEY | FCONTROL, 'A', ID_SELECTALL } };
+	ACCEL Accel[] = { { FVIRTKEY | FCONTROL, 'A', ID_SELECTALL } };
 	const HACCEL hAccel = CreateAcceleratorTable(Accel, sizeof(Accel) / sizeof(ACCEL));
 	BOOL done = 0;
 	while (!done)
