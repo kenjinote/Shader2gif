@@ -6,15 +6,15 @@
 #pragma comment(lib,"glew32s")
 #define GLEW_STATIC
 
-#include<vector>
-#include<string>
-#include<windows.h>
-#include<gdiplus.h>
-#include<richedit.h>
-#include<math.h>
-#include<GL/glew.h>
-#include<GL/glut.h>
-#include"GifEncoder.h"
+#include <vector>
+#include <string>
+#include <windows.h>
+#include <gdiplus.h>
+#include <richedit.h>
+#include <math.h>
+#include <GL/glew.h>
+#include <GL/glut.h>
+#include "GifEncoder.h"
 
 #define PREVIEW_WIDTH 512
 #define PREVIEW_HEIGHT 384
@@ -190,11 +190,6 @@ inline void CreateAnimationGif(LPCTSTR lpszFilePath, int nTime, int nFrameRate)
 	gifEncoder.FinishEncoder();
 }
 
-inline double easeOutExpo(double t, double b, double c, double d)
-{
-	return (t == d) ? b + c : c * (-pow(2, -10 * t / d) + 1) + b;
-}
-
 LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 {
 	static PIXELFORMATDESCRIPTOR pfd = { sizeof(PIXELFORMATDESCRIPTOR), 1,
@@ -218,7 +213,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 		hEdit = CreateWindowEx(WS_EX_CLIENTEDGE, RICHEDIT_CLASS, 0, WS_VISIBLE | WS_CHILD | WS_HSCROLL |
 			WS_VSCROLL | ES_MULTILINE | ES_AUTOVSCROLL | ES_AUTOHSCROLL | ES_NOHIDESEL,
 			0, 0, 0, 0, hWnd, 0, ((LPCREATESTRUCT)lParam)->hInstance, 0);
-		hButton = CreateWindow(TEXT("BUTTON"), TEXT("GIFo—Í..."), WS_VISIBLE | WS_CHILD,
+		hButton = CreateWindow(TEXT("BUTTON"), TEXT("GIFå‡ºåŠ›..."), WS_VISIBLE | WS_CHILD,
 			PREVIEW_WIDTH / 2 - 54, PREVIEW_HEIGHT + 20, 128, 32, hWnd, (HMENU)100, ((LPCREATESTRUCT)lParam)->hInstance, 0);
 		SendMessage(hEdit, EM_SETTEXTMODE, TM_PLAINTEXT, 0);
 		SendMessage(hEdit, EM_LIMITTEXT, -1, 0);
@@ -274,11 +269,11 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 				{
 					if (program) glDeleteProgram(program);
 					program = newProgram;
-					SetWindowText(hWnd, TEXT("ƒtƒ‰ƒOƒƒ“ƒgƒVƒF[ƒ_ [ƒRƒ“ƒpƒCƒ‹¬Œ÷]"));
+					SetWindowText(hWnd, TEXT("ãƒ•ãƒ©ã‚°ãƒ¡ãƒ³ãƒˆã‚·ã‚§ãƒ¼ãƒ€ [ã‚³ãƒ³ãƒ‘ã‚¤ãƒ«æˆåŠŸ]"));
 				}
 				else
 				{
-					SetWindowText(hWnd, TEXT("ƒtƒ‰ƒOƒƒ“ƒgƒVƒF[ƒ_ [ƒRƒ“ƒpƒCƒ‹¸”s]"));
+					SetWindowText(hWnd, TEXT("ãƒ•ãƒ©ã‚°ãƒ¡ãƒ³ãƒˆã‚·ã‚§ãƒ¼ãƒ€ [ã‚³ãƒ³ãƒ‘ã‚¤ãƒ«å¤±æ•—]"));
 				}
 				GlobalFree(lpszText);
 			}
@@ -297,18 +292,14 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 				ZeroMemory(&ofn, sizeof(ofn));
 				ofn.lStructSize = sizeof(OPENFILENAME);
 				ofn.hwndOwner = hWnd;
-				ofn.lpstrFilter = TEXT("GIF(*.gif)\0*.gif\0‚·‚×‚Ä‚Ìƒtƒ@ƒCƒ‹(*.*)\0*.*\0\0");
+				ofn.lpstrFilter = TEXT("GIF(*.gif)\0*.gif\0ã™ã¹ã¦ã®ãƒ•ã‚¡ã‚¤ãƒ«(*.*)\0*.*\0\0");
 				ofn.lpstrFile = szFileName;
 				ofn.nMaxFile = sizeof(szFileName);
 				ofn.Flags = OFN_FILEMUSTEXIST | OFN_OVERWRITEPROMPT;
 				if (GetSaveFileName(&ofn))
 				{
 					CreateAnimationGif(szFileName, 50, 100);
-					MessageBox(
-						hWnd,
-						TEXT("Š®—¹‚µ‚Ü‚µ‚½B"),
-						TEXT("Šm”F"),
-						MB_ICONINFORMATION);
+					MessageBox(hWnd, TEXT("å®Œäº†ã—ã¾ã—ãŸã€‚"), TEXT("ç¢ºèª"), MB_ICONINFORMATION);
 				}
 			}
 			break;
