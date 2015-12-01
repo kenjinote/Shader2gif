@@ -319,16 +319,10 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 			wglDeleteContext(hRC);
 		}
 		if (hDC) ReleaseDC(hStatic, hDC);
+		DestroyWindow(hEdit);
 		FreeLibrary(hRtLib);
 		PostQuitMessage(0);
 		break;
-	case WM_SYSCOMMAND:
-		switch (wParam)
-		{
-		case SC_SCREENSAVE:
-		case SC_MONITORPOWER:
-			return 0;
-		}
 	default:
 		return DefWindowProc(hWnd, msg, wParam, lParam);
 	}
