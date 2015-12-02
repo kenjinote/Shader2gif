@@ -2,19 +2,23 @@
 #define UNICODE
 #endif
 
-#pragma comment(lib,"gdiplus")
-#pragma comment(lib,"glew32s")
+#pragma comment(lib, "gdiplus")
+#pragma comment(lib, "glew32s")
+#pragma comment(lib, "shlwapi")
+
 #define GLEW_STATIC
 
 #include <vector>
 #include <string>
 #include <windows.h>
+#include <shlwapi.h>
 #include <gdiplus.h>
 #include <richedit.h>
 #include <math.h>
 #include <GL/glew.h>
 #include <GL/glut.h>
 #include "GifEncoder.h"
+#include "resource.h"
 
 #define PREVIEW_WIDTH 512
 #define PREVIEW_HEIGHT 384
@@ -30,6 +34,7 @@ const TCHAR szClassName[] = TEXT("Window");
 const GLfloat position[][2] = { { -1.f, -1.f }, { 1.f, -1.f }, { 1.f, 1.f }, { -1.f, 1.f } };
 const int vertices = sizeof position / sizeof position[0];
 const GLchar vsrc[] = "in vec4 position;void main(void){gl_Position = position;}";
+GLuint texture1;
 
 inline GLint GetShaderInfoLog(GLuint shader)
 {
@@ -111,6 +116,24 @@ inline GLuint CreateProgram(LPCSTR vsrc, LPCSTR fsrc)
 	return program;
 }
 
+VOID SetTexture(HBITMAP hBitmap)
+{
+	BITMAP inf;
+	GetObject(hBitmap, sizeof(BITMAP), &inf);
+	if (inf.bmBitsPixel != 24){ return; }
+	if (texture1)
+	{
+		glDeleteTextures(1, &texture1);
+	}
+	glGenTextures(1, &texture1);
+	glBindTexture(GL_TEXTURE_1D, texture1);
+	glTexParameteri(GL_TEXTURE_1D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+	glTexParameteri(GL_TEXTURE_1D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+	glTexParameteri(GL_TEXTURE_1D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+	glTexImage1D(GL_TEXTURE_1D, 0, 3, inf.bmWidth, inf.bmHeight, GL_BGR_EXT, GL_UNSIGNED_BYTE, inf.bmBits);
+	glEnable(GL_TEXTURE_1D);
+}
+
 inline BOOL InitGL(GLvoid)
 {
 	glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
@@ -124,6 +147,9 @@ inline BOOL InitGL(GLvoid)
 	glEnableVertexAttribArray(0);
 	glBindBuffer(GL_ARRAY_BUFFER, 0);
 	glBindVertexArray(0);
+	HBITMAP hBitmap = (HBITMAP)LoadImage(GetModuleHandle(0), MAKEINTRESOURCE(IDB_BITMAP1), IMAGE_BITMAP, 0, 0, LR_CREATEDIBSECTION);
+	SetTexture(hBitmap);
+	DeleteObject(hBitmap);
 	return TRUE;
 }
 
@@ -249,6 +275,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 		SendMessage(hWnd, WM_COMMAND, MAKEWPARAM(0, EN_CHANGE), (long)hEdit);
 		SendMessage(hEdit, EM_SETEVENTMASK, 0, (LPARAM)(SendMessage(hEdit, EM_GETEVENTMASK, 0, 0) | ENM_CHANGE));
 		SetFocus(hEdit);
+		DragAcceptFiles(hWnd, TRUE);
 		break;
 	case WM_SIZE:
 		MoveWindow(hEdit, PREVIEW_WIDTH + 20, 10, LOWORD(lParam) - PREVIEW_WIDTH - 30, HIWORD(lParam) - 20, 1);
@@ -305,11 +332,27 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 			break;
 		}
 		break;
+	case WM_DROPFILES:
+		{
+			const HDROP hDrop = (HDROP)wParam;
+			TCHAR szFileName[MAX_PATH];
+			DragQueryFile(hDrop, 0, szFileName, sizeof(szFileName));
+			LPCTSTR lpExt = PathFindExtension(szFileName);
+			if (PathMatchSpec(lpExt, TEXT("*.bmp")))
+			{
+				const HBITMAP hBitmap = (HBITMAP)LoadImage(GetModuleHandle(0), szFileName, IMAGE_BITMAP, 0, 0, LR_LOADFROMFILE | LR_CREATEDIBSECTION);
+				SetTexture(hBitmap);
+				DeleteObject(hBitmap);
+			}
+			DragFinish(hDrop);
+		}
+		break;
 	case WM_ACTIVATE:
 		active = !HIWORD(wParam);
 		break;
 	case WM_DESTROY:
 		DeleteObject(hFont);
+		if (texture1) glDeleteTextures(1, &texture1);
 		if (program) glDeleteProgram(program);
 		if (vbo) glDeleteBuffers(1, &vbo);
 		if (vao) glDeleteVertexArrays(1, &vao);
