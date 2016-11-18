@@ -22,7 +22,6 @@
 
 #define PREVIEW_WIDTH 512
 #define PREVIEW_HEIGHT 384
-#define ID_SELECTALL 1001
 #define WM_CREATED WM_APP
 
 HDC hDC;
@@ -238,9 +237,9 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 			10, 10, PREVIEW_WIDTH, PREVIEW_HEIGHT, hWnd, 0, ((LPCREATESTRUCT)lParam)->hInstance, 0);
 		hEdit = CreateWindowEx(WS_EX_CLIENTEDGE, RICHEDIT_CLASS, 0, WS_VISIBLE | WS_CHILD | WS_HSCROLL |
 			WS_VSCROLL | ES_MULTILINE | ES_AUTOVSCROLL | ES_AUTOHSCROLL | ES_NOHIDESEL,
-			0, 0, 0, 0, hWnd, 0, ((LPCREATESTRUCT)lParam)->hInstance, 0);
+			0, 0, 0, 0, hWnd, (HMENU)ID_EDIT, ((LPCREATESTRUCT)lParam)->hInstance, 0);
 		hButton = CreateWindow(TEXT("BUTTON"), TEXT("GIF出力..."), WS_VISIBLE | WS_CHILD,
-			PREVIEW_WIDTH / 2 - 54, PREVIEW_HEIGHT + 20, 128, 32, hWnd, (HMENU)100, ((LPCREATESTRUCT)lParam)->hInstance, 0);
+			PREVIEW_WIDTH / 2 - 54, PREVIEW_HEIGHT + 20, 128, 32, hWnd, (HMENU)ID_EXPORT, ((LPCREATESTRUCT)lParam)->hInstance, 0);
 		SendMessage(hEdit, EM_SETTEXTMODE, TM_PLAINTEXT, 0);
 		SendMessage(hEdit, EM_LIMITTEXT, -1, 0);
 		SendMessage(hEdit, WM_SETFONT, (WPARAM)hFont, 0);
@@ -272,7 +271,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 		PostMessage(hWnd, WM_CREATED, 0, 0);
 		break;
 	case WM_CREATED:
-		SendMessage(hWnd, WM_COMMAND, MAKEWPARAM(0, EN_CHANGE), (long)hEdit);
+		SendMessage(hWnd, WM_COMMAND, MAKEWPARAM(ID_EDIT, EN_CHANGE), (long)hEdit);
 		SendMessage(hEdit, EM_SETEVENTMASK, 0, (LPARAM)(SendMessage(hEdit, EM_GETEVENTMASK, 0, 0) | ENM_CHANGE));
 		SetFocus(hEdit);
 		DragAcceptFiles(hWnd, TRUE);
@@ -283,7 +282,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 	case WM_COMMAND:
 		switch (LOWORD(wParam))
 		{
-		case 0:
+		case ID_EDIT:
 			if (HIWORD(wParam) == EN_CHANGE)
 			{
 				const DWORD dwSize = GetWindowTextLengthA(hEdit);
@@ -312,7 +311,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 				SetFocus(hEdit);
 			}
 			break;
-		case 100:
+		case ID_EXPORT:
 			{
 				TCHAR szFileName[MAX_PATH] = {0};
 				OPENFILENAME ofn;
@@ -327,6 +326,25 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 				{
 					CreateAnimationGif(szFileName, 50, 100);
 					MessageBox(hWnd, TEXT("完了しました。"), TEXT("確認"), MB_ICONINFORMATION);
+				}
+			}
+			break;
+		case ID_IMPORT_TEXTURE:
+			{
+				TCHAR szFileName[MAX_PATH] = { 0 };
+				OPENFILENAME ofn;
+				ZeroMemory(&ofn, sizeof(ofn));
+				ofn.lStructSize = sizeof(OPENFILENAME);
+				ofn.hwndOwner = hWnd;
+				ofn.lpstrFilter = TEXT("Bitmap(*.bmp)\0*.bmp\0すべてのファイル(*.*)\0*.*\0\0");
+				ofn.lpstrFile = szFileName;
+				ofn.nMaxFile = sizeof(szFileName);
+				ofn.Flags = OFN_FILEMUSTEXIST;
+				if (GetOpenFileName(&ofn))
+				{
+					const HBITMAP hBitmap = (HBITMAP)LoadImage(GetModuleHandle(0), szFileName, IMAGE_BITMAP, 0, 0, LR_LOADFROMFILE | LR_CREATEDIBSECTION);
+					SetTexture(hBitmap);
+					DeleteObject(hBitmap);
 				}
 			}
 			break;
@@ -378,7 +396,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPreInst, LPSTR pCmdLine, int 
 	Gdiplus::GdiplusStartupInput gdiSI;
 	Gdiplus::GdiplusStartup(&gdiToken, &gdiSI, NULL);
 	MSG msg;
-	const WNDCLASS wndclass = { 0, WndProc, 0, 0, hInstance, 0, LoadCursor(0, IDC_ARROW), (HBRUSH)(COLOR_WINDOW + 1), 0, szClassName };
+	const WNDCLASS wndclass = { 0, WndProc, 0, 0, hInstance, 0, LoadCursor(0, IDC_ARROW), (HBRUSH)(COLOR_WINDOW + 1), MAKEINTRESOURCE(IDR_MENU1), szClassName };
 	RegisterClass(&wndclass);
 	const HWND hWnd = CreateWindow(szClassName, 0, WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN, CW_USEDEFAULT, 0, CW_USEDEFAULT, 0, 0, 0, hInstance, 0);
 	ShowWindow(hWnd, SW_SHOWDEFAULT);
